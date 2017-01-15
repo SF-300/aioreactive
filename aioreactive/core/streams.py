@@ -1,6 +1,6 @@
 import logging
 from asyncio import Future
-from typing import TypeVar, Generic
+from typing import TypeVar, Generic, Dict
 from typing import AsyncIterable, AsyncIterator
 from abc import abstractmethod
 
@@ -120,10 +120,12 @@ class AsyncMultiStream(AsyncMultiFuture[T], AsyncObservable[T]):
 
         await super().asend(value)
 
-        for stream in list(self._observers):
-            await stream.asend(value)
-        else:
+        if len(self._observers) == 0:
             log.info("AsyncMultiStream.asend, dropped value")
+            return
+
+        for stream in self._observers.values():
+            await stream.asend(value)
 
     async def athrow(self, ex: Exception) -> None:
         if self.done():
@@ -131,10 +133,12 @@ class AsyncMultiStream(AsyncMultiFuture[T], AsyncObservable[T]):
 
         await super().athrow(ex)
 
-        for stream in list(self._observers):
-            await stream.athrow(ex)
-        else:
+        if len(self._observers) == 0:
             log.info("AsyncMultiStream.athrow, dropped exception: ", ex)
+            return
+
+        for stream in self._observers.values():
+            await stream.athrow(ex)
 
     async def aclose(self) -> None:
         if self.done():
@@ -142,10 +146,12 @@ class AsyncMultiStream(AsyncMultiFuture[T], AsyncObservable[T]):
 
         await super().aclose()
 
-        for stream in list(self._observers):
-            await stream.aclose()
-        else:
+        if len(self._observers) == 0:
             log.info("AsyncMultiStream.aclose, dropped close")
+            return
+
+        for stream in self._observers.values():
+            await stream.aclose()
 
     async def __asubscribe__(self, observer: AsyncObserver) -> AsyncSingleStream:
         """Start streaming."""
@@ -158,8 +164,8 @@ class AsyncMultiStream(AsyncMultiFuture[T], AsyncObservable[T]):
 
         def done(sub: Future) -> None:
             log.debug("AsyncMultiFuture:done()")
-            if stream in self._observers:
-                del self._observers[stream]
+            if observer in self._observers:
+                del self._observers[observer]
 
         stream.add_done_callback(done)
         return stream
